@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Assignment System</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&family=Orbitron:wght@400;700&display=swap');
+        
+        :root {
+            --background-color: #f0f0f0;
+            --container-background: #ffffff;
+            --text-color: #000000;
+            --accent-color: #333333;
+            --hover-color: #007bff;
+            --box-shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: var(--text-color);
+        }
+
+        .container {
+            max-width: 800px;
+            background-color: var(--container-background);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 20px var(--box-shadow);
+            border: 1px solid #e0e0e0;
+        }
+
+        h1, h2 {
+            text-align: center;
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .task-info {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .cleaner-list {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background-color: var(--accent-color);
+            color: var(--container-background);
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+
+        .btn:hover {
+            background-color: var(--hover-color);
+        }
+
+        #email-status {
+            color: green;
+            text-align: center;
+        }
+
+        #start-detection {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        #task-buttons {
+            display: none;
+        }
+
+        #assign-task-view {
+            display: none; /* Hidden until detection is complete */
+        }
+
+        #home-link {
+            display: none; /* Hidden until task is assigned */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Building Manager</h1>
+
+        <!-- Task detection section -->
+        <div id="start-detection">
+            <button class="btn" onclick="startDetection()">Start Detecting Task</button>
+        </div>
+
+        <!-- Task information -->
+        <div class="task-info">
+            <h2 id="task-detected">Detected Task: None</h2>
+        </div>
+
+        <!-- Task assignment view -->
+        <div id="assign-task-view">
+            <h2>Assign Task</h2>
+            <div id="cleaner-list" class="cleaner-list"></div>
+        </div>
+
+        <!-- Email status message -->
+        <div id="email-status"></div>
+
+        <!-- Back to Home link -->
+        <a id="home-link" class="btn" href="#" onclick="goHome()">Back to Home</a>
+    </div>
+
+    <script>
+        let availableCleaners = [];  // Available cleaners from the backend
+        const assignedCleaners = []; // Track already assigned cleaners
+
+        // Start the detection process
+        function startDetection() {
+            fetch('/detect', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message === 'Objects detected.') {
+                    document.getElementById('task-detected').textContent = 'Detected Task: ' + data.objects.join(', ');
+                    document.getElementById('assign-task-view').style.display = 'block';
+                    loadAvailableCleaners();  // Load available cleaners after task detection
+                } else {
+                    alert('No objects detected. Try again.');
+                }
+            })
+            .catch(error => {
+                console.error('Error during detection:', error);
+            });
+        }
+
+        // Load available cleaners from the backend and display them
+        function loadAvailableCleaners() {
+            fetch('/available-cleaners', { method: 'GET' })
+            .then(response => response.json())
+            .then(data => {
+                availableCleaners = data.cleaners;
+                displayCleaners();  // Display available cleaners for assignment
+            })
+            .catch(error => {
+                console.error('Error fetching available cleaners:', error);
+            });
+        }
+
+        // Display available cleaners as buttons for task assignment
+        function displayCleaners() {
+            const cleanerList = document.getElementById('cleaner-list');
+            cleanerList.innerHTML = '';  // Clear previous content
+
+            availableCleaners.forEach(cleaner => {
+                const button = document.createElement('button');
+                button.classList.add('btn');
+                button.textContent = `Assign to ${cleaner.name}`;
+                button.onclick = () => assignTask(cleaner.name);  // Assign task when clicked
+                cleanerList.appendChild(button);
+            });
+        }
+
+        // Assign task to the selected cleaner and remove them from the list
+        function assignTask(cleanerName) {
+            const detectedTask = document.getElementById('task-detected').textContent.split(": ")[1];
+            if (detectedTask === "None") {
+                alert('No task to assign.');
+                return;
+            }
+
+            // Call backend to assign the task and send email
+            fetch('/assign-task', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ task: detectedTask, cleaner: cleanerName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('email-status').textContent = data.message;
+                // Remove assigned cleaner from available list
+                assignedCleaners.push(cleanerName);
+                // Hide cleaner buttons after assignment
+                document.getElementById('assign-task-view').style.display = 'none';
+                document.getElementById('home-link').style.display = 'inline-block'; // Show back to home button
+            })
+            .catch(error => {
+                console.error('Error during task assignment:', error);
+            });
+        }
+
+        // Navigate back to home and reset the detection state
+        function goHome() {
+            document.getElementById('task-detected').textContent = 'Detected Task: None';
+            document.getElementById('start-detection').style.display = 'flex';
+            document.getElementById('assign-task-view').style.display = 'none';
+            document.getElementById('email-status').textContent = '';
+            document.getElementById('home-link').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
